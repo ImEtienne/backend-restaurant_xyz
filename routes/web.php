@@ -3,8 +3,8 @@
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
+Route::get('/', function (): JsonResponse {
+    return response()->json(['message' => 'API de reservations']);
 });
 
 Route::view('/docs', 'swagger')->name('docs');

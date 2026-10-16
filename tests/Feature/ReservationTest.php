@@ -19,7 +19,7 @@ class ReservationTest extends TestCase
         Notification::fake();
         $payload = $this->validPayload();
 
-        $response = $this->postJson('/api/reservations', $payload);
+        $response = $this->withHeader('Origin', 'http://localhost:5173')->postJson('/api/reservations', $payload);
 
         $response->assertCreated()->assertExactJson([
             'id' => $response->json('id'),
@@ -185,7 +185,7 @@ class ReservationTest extends TestCase
 
         $response->assertNoContent()
             ->assertHeader('Access-Control-Allow-Origin', 'http://localhost:5173')
-            ->assertHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+            ->assertHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
         $this->assertDatabaseCount('reservations', 0);
     }
 
@@ -198,6 +198,16 @@ class ReservationTest extends TestCase
 
         $response->assertHeaderMissing('Access-Control-Allow-Origin');
         $this->assertDatabaseCount('reservations', 0);
+    }
+
+    public function test_accepts_public_reservations_without_csrf_even_from_the_frontend(): void
+    {
+        $this->travelTo(now()->setDate(2026, 10, 15)->setTime(12, 0));
+        $this->app->instance('env', 'local');
+
+        $this->withHeader('Origin', 'http://localhost:5173')->postJson('/api/reservations', $this->validPayload())->assertCreated();
+
+        $this->assertDatabaseCount('reservations', 1);
     }
 
     private function validPayload(): array
