@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminReservationController;
+use App\Http\Controllers\AdminSearchController;
 use App\Http\Controllers\AdminSessionController;
 use App\Http\Controllers\AdminStatsController;
 use App\Http\Controllers\AdminUserController;
@@ -21,6 +22,8 @@ Route::prefix('admin')->name('admin.')->middleware('cache.headers:no_store;priva
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('/logout', [AdminSessionController::class, 'destroy'])->name('logout');
+
+        Route::get('/search', AdminSearchController::class)->middleware(['can:manage-users', 'can:manage-reservations', 'throttle:60,1'])->name('search');
 
         Route::middleware('can:manage-reservations')->group(function (): void {
             Route::get('/stats', [AdminStatsController::class, 'summary'])->name('stats.summary');

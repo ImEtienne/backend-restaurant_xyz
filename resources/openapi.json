@@ -1401,6 +1401,116 @@
                     }
                 }
             }
+        },
+        "/api/admin/search": {
+            "get": {
+                "tags": [
+                    "Administration"
+                ],
+                "summary": "Recherche globale du dashboard",
+                "operationId": "adminSearch",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "description": "Recherche partielle sur les noms/emails des utilisateurs et les noms/emails/telephones/dates/statuts des reservations. Les statuts sont pending, confirmed, rejected. Les valeurs numeriques et #id recherchent aussi un identifiant exact. Les caracteres %, _ et ! sont traites litteralement. Resultats separes par type, tries par id decroissant ; aucun mot de passe ni secret. Limite : 60 requetes/minute. Aucune pagination ; meta.has_more indique si une recherche plus precise est necessaire.",
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "minLength": 2,
+                            "maxLength": 100
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 20,
+                            "default": 5
+                        },
+                        "description": "Nombre maximum de resultats par type."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Resultats groupes.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "users": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/components/schemas/AdminUser"
+                                                    }
+                                                },
+                                                "reservations": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/components/schemas/AdminReservation"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "meta": {
+                                            "type": "object",
+                                            "properties": {
+                                                "q": {
+                                                    "type": "string"
+                                                },
+                                                "limit_per_type": {
+                                                    "type": "integer"
+                                                },
+                                                "has_more": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "users": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "reservations": {
+                                                            "type": "boolean"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Droits de gestion des utilisateurs et reservations requis."
+                    },
+                    "422": {
+                        "description": "Requete ou limite invalide.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Limite de recherche atteinte."
+                    }
+                }
+            }
         }
     },
     "components": {
