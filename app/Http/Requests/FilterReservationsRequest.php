@@ -16,7 +16,7 @@ class FilterReservationsRequest extends FormRequest
     {
         return [
             'date' => ['nullable', 'date_format:Y-m-d'],
-            'status' => ['nullable', 'string', 'in:pending,confirmed,rejected'],
+            'status' => ['nullable', 'string', 'in:pending,confirmed,rejected,cancelled'],
         ];
     }
 }

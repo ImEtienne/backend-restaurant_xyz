@@ -25,7 +25,7 @@ class ProfileTest extends TestCase
         $this->postJson('/api/login', ['email' => $user->email, 'password' => 'password', 'is_admin' => true])
             ->assertOk()->assertJsonPath('data.id', $user->id)->assertJsonPath('data.is_admin', false)->assertJsonMissingPath('data.password');
         Auth::forgetGuards();
-        $this->getJson('/api/profile')->assertOk()->assertExactJson(['data' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'is_admin' => false]]);
+        $this->getJson('/api/profile')->assertOk()->assertExactJson(['data' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'is_admin' => false, 'role' => 'client', 'is_active' => true]]);
     }
 
     public function test_name_and_password_changes_keep_the_current_session_usable(): void

@@ -13,9 +13,15 @@ use Illuminate\Support\Facades\DB;
 
 class AdminUserController extends Controller
 {
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
-        return AdminUserResource::collection(User::query()->orderByDesc('id')->paginate(20));
+        $filters = $request->validate(['is_active' => ['sometimes', 'required', 'boolean']]);
+        $query = User::query();
+        if (array_key_exists('is_active', $filters)) {
+            $query->where('is_admin', false)->where('is_active', $request->boolean('is_active'));
+        }
+
+        return AdminUserResource::collection($query->orderByDesc('id')->paginate(20)->withQueryString());
     }
 
     public function show(User $user): AdminUserResource

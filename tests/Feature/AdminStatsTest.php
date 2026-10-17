@@ -36,7 +36,7 @@ class AdminStatsTest extends TestCase
         $response = $this->actingAs(User::factory()->admin()->create())->getJson('/api/admin/stats?start_date=2026-10-01&end_date=2026-10-03');
 
         $response->assertOk()->assertExactJson([
-            'data' => ['total_reservations' => 3, 'pending' => 1, 'confirmed' => 1, 'rejected' => 1,
+            'data' => ['total_reservations' => 3, 'pending' => 1, 'confirmed' => 1, 'rejected' => 1, 'cancelled' => 0,
                 'total_guests' => 9, 'confirmed_guests' => 4, 'average_party_size' => 3, 'confirmation_rate' => 33.33],
             'meta' => ['start_date' => '2026-10-01', 'end_date' => '2026-10-03', 'timezone' => 'Europe/Paris', 'date_basis' => 'reservation_date'],
         ]);

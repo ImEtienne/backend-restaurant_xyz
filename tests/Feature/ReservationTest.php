@@ -23,6 +23,7 @@ class ReservationTest extends TestCase
 
         $response->assertCreated()->assertExactJson([
             'id' => $response->json('id'),
+            'registration_token' => $response->json('registration_token'),
             'status' => 'pending',
             'message' => 'Votre demande de reservation a ete recue et reste en attente de confirmation.',
         ]);

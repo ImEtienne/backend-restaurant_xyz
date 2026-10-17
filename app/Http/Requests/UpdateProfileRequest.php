@@ -22,6 +22,8 @@ class UpdateProfileRequest extends FormRequest
             'password' => ['sometimes', 'required', 'string', 'min:12', 'max:1024', 'confirmed'],
             'current_password' => [Rule::requiredIf(fn (): bool => $this->has('password') || ($this->has('email') && $this->input('email') !== $this->user()->email)), 'string', 'current_password:web'],
             'is_admin' => ['prohibited'],
+            'is_active' => ['prohibited'],
+            'role' => ['prohibited'],
         ];
     }
 }

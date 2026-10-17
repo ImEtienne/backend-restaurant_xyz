@@ -17,6 +17,16 @@ class UserSessionController extends Controller
         if (! Auth::guard('web')->attempt($request->validated())) {
             throw ValidationException::withMessages(['email' => 'Identifiants incorrects.']);
         }
+        $user = Auth::guard('web')->user();
+        if (! $user->is_admin && ! $user->is_active) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            abort(response()->json([
+                'code' => 'ACCOUNT_PENDING_APPROVAL',
+                'message' => "Votre profil n'est pas encore active. Un administrateur doit le valider. Merci de patienter avant de pouvoir utiliser les services.",
+            ], 403));
+        }
         $request->session()->regenerate();
 
         return new AdminUserResource(Auth::guard('web')->user());

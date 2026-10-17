@@ -2,8 +2,8 @@
     "openapi": "3.0.3",
     "info": {
         "title": "API de reservations",
-        "version": "1.2.0",
-        "description": "Enregistrement des demandes de reservation du restaurant. Une creation laisse la demande en attente : aucune table n'est confirmee et aucun email n'est envoye. Les essais enregistrent de vraies demandes dans la base du serveur selectionne. Administration par session Sanctum : frontend et API doivent partager le meme domaine principal (ou utiliser tous deux localhost en developpement). Configurer FRONTEND_URLS et SANCTUM_STATEFUL_DOMAINS avec les origines/hosts reels, ports inclus pour Sanctum. Avant le login, GET /sanctum/csrf-cookie avec credentials: include. Envoyer Accept: application/json, les cookies (credentials: include) et, pour POST/PATCH, le cookie XSRF-TOKEN decode dans X-XSRF-TOKEN. Axios : withCredentials=true et withXSRFToken=true. Le navigateur fournit Origin/Referer. Les reponses admin contiennent data ; les listes ajoutent links et meta. Aucune inscription publique ni emission de token Bearer. Les utilisateurs ordinaires se connectent via POST /api/login et accedent a GET/PATCH /api/profile. Les administrateurs gerent les comptes via /api/admin/users. L inscription publique reste absente."
+        "version": "1.3.0",
+        "description": "Enregistrement des demandes de reservation du restaurant. Une creation laisse la demande en attente : aucune table n'est confirmee et aucun email n'est envoye. Les essais enregistrent de vraies demandes dans la base du serveur selectionne. Administration par session Sanctum : frontend et API doivent partager le meme domaine principal (ou utiliser tous deux localhost en developpement). Configurer FRONTEND_URLS et SANCTUM_STATEFUL_DOMAINS avec les origines/hosts reels, ports inclus pour Sanctum. Avant le login, GET /sanctum/csrf-cookie avec credentials: include. Envoyer Accept: application/json, les cookies (credentials: include) et, pour POST/PATCH, le cookie XSRF-TOKEN decode dans X-XSRF-TOKEN. Axios : withCredentials=true et withXSRFToken=true. Le navigateur fournit Origin/Referer. Les reponses admin contiennent data ; les listes ajoutent links et meta. Aucune emission de token Bearer. Les utilisateurs ordinaires se connectent via POST /api/login et accedent a GET/PATCH /api/profile. Les administrateurs gerent les comptes via /api/admin/users. L inscription generale reste absente ; seule l inscription client liee a une cle de reservation est disponible. Espace client : apres reservation publique, conserver registration_token (cle confidentielle, valable 7 jours, usage unique), puis POST /api/client/register avec email et mot de passe. Aucune verification email. Le compte reste inactif jusqu a validation admin. POST /api/login renvoie 403 et ACCOUNT_PENDING_APPROVAL tant que le profil est inactif. Les toasts doivent afficher le champ message. Les reservations sont rattachees par user_id, jamais automatiquement par email. Une reservation en attente et a venir est modifiable/annulable ; confirmed, rejected, cancelled sont verrouilles. Le frontend affiche les statuts a partir des valeurs retournees."
     },
     "servers": [
         {
@@ -19,6 +19,10 @@
         {
             "name": "Administration",
             "description": "Connexion et gestion reservees aux administrateurs. Creer un compte avec php artisan admin:create email@example.com dans un terminal interactif."
+        },
+        {
+            "name": "Clients",
+            "description": "Comptes clients actifs uniquement, sauf inscription. Aucune verification email ; activation manuelle par un administrateur."
         }
     ],
     "paths": {
@@ -427,7 +431,8 @@
                             "enum": [
                                 "pending",
                                 "confirmed",
-                                "rejected"
+                                "rejected",
+                                "cancelled"
                             ]
                         }
                     },
@@ -896,6 +901,9 @@
                                 }
                             }
                         }
+                    },
+                    "403": {
+                        "description": "Profil client inactif. Afficher message dans un toast. code=ACCOUNT_PENDING_APPROVAL. Aucune session connectee conservee."
                     }
                 },
                 "parameters": [
@@ -1128,6 +1136,18 @@
                             "type": "integer",
                             "minimum": 1
                         }
+                    },
+                    {
+                        "name": "is_active",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "enum": [
+                                0,
+                                1
+                            ]
+                        },
+                        "description": "Filtre les comptes clients : 0 en attente/inactifs, 1 actifs. Les administrateurs sont exclus lorsque ce filtre est utilise."
                     }
                 ]
             },
@@ -1511,6 +1531,779 @@
                     }
                 }
             }
+        },
+        "/api/client/register": {
+            "post": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Creer un profil client en attente depuis une reservation",
+                "operationId": "registerClient",
+                "security": [],
+                "responses": {
+                    "201": {
+                        "description": "Profil cree mais non connecte. code=ACCOUNT_PENDING_APPROVAL et message a afficher."
+                    },
+                    "422": {
+                        "description": "Email deja utilise, mot de passe invalide, cle invalide/expiree/deja utilisee, email different de la reservation ou tentative de fixer les droits."
+                    },
+                    "429": {
+                        "description": "Maximum 5 tentatives par minute."
+                    },
+                    "419": {
+                        "description": "CSRF manquant pour une requete du frontend configure."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "email",
+                                    "password",
+                                    "password_confirmation",
+                                    "registration_token"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "minLength": 12,
+                                        "maxLength": 1024
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string",
+                                        "format": "password"
+                                    },
+                                    "registration_token": {
+                                        "type": "string",
+                                        "minLength": 64,
+                                        "maxLength": 64
+                                    }
+                                },
+                                "description": "Nom repris de la reservation. is_admin, role et is_active interdits. Aucune autre reservation partageant cet email ne sera automatiquement rattachee."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/users/{user}/activation": {
+            "parameters": [
+                {
+                    "name": "user",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                        "type": "integer"
+                    }
+                }
+            ],
+            "patch": {
+                "tags": [
+                    "Administration"
+                ],
+                "summary": "Activer ou desactiver un profil client (admin uniquement)",
+                "operationId": "activateClient",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Profil mis a jour.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/AdminUser"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Profil non active ou droits insuffisants."
+                    },
+                    "419": {
+                        "description": "CSRF invalide ou absent."
+                    },
+                    "422": {
+                        "description": "Champs invalides.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Utilisateur inexistant."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "is_active"
+                                ],
+                                "properties": {
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/reservations/{reservation}/client": {
+            "parameters": [
+                {
+                    "name": "reservation",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                        "type": "integer"
+                    }
+                }
+            ],
+            "patch": {
+                "tags": [
+                    "Administration"
+                ],
+                "summary": "Rattacher explicitement une reservation a un client (admin uniquement)",
+                "operationId": "assignReservationClient",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reservation avec statut courant.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/AdminReservation"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Profil non active ou droits insuffisants."
+                    },
+                    "419": {
+                        "description": "CSRF invalide ou absent."
+                    },
+                    "422": {
+                        "description": "Champs invalides.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Reservation inexistante."
+                    },
+                    "409": {
+                        "description": "Reservation deja rattachee a un autre client."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "user_id"
+                                ],
+                                "properties": {
+                                    "user_id": {
+                                        "type": "integer"
+                                    }
+                                },
+                                "description": "Client existant, actif ou non. Les administrateurs ne sont pas des proprietaires clients. Ne modifie pas le statut de la reservation."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/client/reservations": {
+            "get": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Lister ses reservations, 20 par page",
+                "operationId": "clientReservations",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Uniquement les reservations rattachees au compte courant.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/AdminReservation"
+                                            }
+                                        },
+                                        "links": {
+                                            "type": "object"
+                                        },
+                                        "meta": {
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Profil non active ou droits insuffisants."
+                    },
+                    "419": {
+                        "description": "CSRF invalide ou absent."
+                    },
+                    "422": {
+                        "description": "Champs invalides.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Creer une nouvelle reservation depuis son compte",
+                "operationId": "clientCreateReservation",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Reservation avec statut courant.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/AdminReservation"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Profil non active ou droits insuffisants."
+                    },
+                    "419": {
+                        "description": "CSRF invalide ou absent."
+                    },
+                    "422": {
+                        "description": "Champs invalides.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "5 demandes par minute."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "name",
+                                    "phone",
+                                    "date",
+                                    "time",
+                                    "guests"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 100,
+                                        "description": "Nom du client, non vide apres suppression des espaces en debut et fin."
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "minLength": 6,
+                                        "maxLength": 32
+                                    },
+                                    "date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "description": "Date locale YYYY-MM-DD, passee refusee. Choisir une date future lors des essais."
+                                    },
+                                    "time": {
+                                        "type": "string",
+                                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                                        "example": "19:30",
+                                        "description": "Heure locale HH:mm, sans secondes. La combinaison date/heure doit etre future."
+                                    },
+                                    "guests": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 10
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "description": "Le serveur impose email, user_id et pending depuis le compte courant. Pas de cle de rattachement necessaire."
+            }
+        },
+        "/api/client/reservations/{reservation}": {
+            "parameters": [
+                {
+                    "name": "reservation",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                        "type": "integer"
+                    }
+                }
+            ],
+            "get": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Consulter une de ses reservations",
+                "operationId": "clientShowReservation",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reservation avec statut courant.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/AdminReservation"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Profil non active ou droits insuffisants."
+                    },
+                    "419": {
+                        "description": "CSRF invalide ou absent."
+                    },
+                    "422": {
+                        "description": "Champs invalides.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Reservation inexistante ou appartenant a un autre client."
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Modifier une reservation en attente et a venir",
+                "operationId": "clientUpdateReservation",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reservation avec statut courant.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/AdminReservation"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Profil non active ou droits insuffisants."
+                    },
+                    "419": {
+                        "description": "CSRF invalide ou absent."
+                    },
+                    "422": {
+                        "description": "Champs invalides.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Reservation inexistante ou appartenant a un autre client."
+                    },
+                    "409": {
+                        "description": "Reservation deja traitee ou date initiale passee."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 100,
+                                        "description": "Nom du client, non vide apres suppression des espaces en debut et fin."
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "minLength": 6,
+                                        "maxLength": 32
+                                    },
+                                    "date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "description": "Date locale YYYY-MM-DD, passee refusee. Choisir une date future lors des essais."
+                                    },
+                                    "time": {
+                                        "type": "string",
+                                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                                        "example": "19:30",
+                                        "description": "Heure locale HH:mm, sans secondes. La combinaison date/heure doit etre future."
+                                    },
+                                    "guests": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 10
+                                    }
+                                },
+                                "description": "Mise a jour partielle. email, user_id et status interdits. La nouvelle date/heure doit etre dans le futur et etre une heure locale valide."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/client/reservations/{reservation}/cancel": {
+            "parameters": [
+                {
+                    "name": "reservation",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                        "type": "integer"
+                    }
+                }
+            ],
+            "post": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Annuler une reservation en attente et a venir",
+                "operationId": "clientCancelReservation",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reservation avec statut courant.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/AdminReservation"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Profil non active ou droits insuffisants."
+                    },
+                    "419": {
+                        "description": "CSRF invalide ou absent."
+                    },
+                    "422": {
+                        "description": "Champs invalides.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Reservation inexistante ou appartenant a un autre client."
+                    },
+                    "409": {
+                        "description": "Reservation confirmee, refusee, deja annulee ou passee."
+                    }
+                },
+                "description": "Conserve la reservation avec status=cancelled ; ne supprime aucune ligne."
+            }
+        },
+        "/api/client/reservations/claim": {
+            "post": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Rattacher une autre reservation publique avec sa cle confidentielle",
+                "operationId": "clientClaimReservation",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reservation avec statut courant.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/AdminReservation"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Profil non active ou droits insuffisants."
+                    },
+                    "419": {
+                        "description": "CSRF invalide ou absent."
+                    },
+                    "422": {
+                        "description": "Champs invalides.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Cle invalide, expiree, deja utilisee ou email different du compte."
+                    },
+                    "429": {
+                        "description": "5 tentatives par minute."
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "registration_token"
+                                ],
+                                "properties": {
+                                    "registration_token": {
+                                        "type": "string",
+                                        "minLength": 64,
+                                        "maxLength": 64
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/client/stats": {
+            "get": {
+                "tags": [
+                    "Clients"
+                ],
+                "summary": "Consulter ses statistiques personnelles",
+                "operationId": "clientStats",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Historique complet du compte, sans les reservations des autres clients. upcoming compte les demandes pending/confirmed dont la date et heure sont futures. total_guests inclut tous les statuts.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "total_reservations": {
+                                                    "type": "integer",
+                                                    "minimum": 0
+                                                },
+                                                "pending": {
+                                                    "type": "integer",
+                                                    "minimum": 0
+                                                },
+                                                "confirmed": {
+                                                    "type": "integer",
+                                                    "minimum": 0
+                                                },
+                                                "rejected": {
+                                                    "type": "integer",
+                                                    "minimum": 0
+                                                },
+                                                "cancelled": {
+                                                    "type": "integer",
+                                                    "minimum": 0
+                                                },
+                                                "upcoming": {
+                                                    "type": "integer",
+                                                    "minimum": 0
+                                                },
+                                                "total_guests": {
+                                                    "type": "integer",
+                                                    "minimum": 0
+                                                }
+                                            }
+                                        },
+                                        "meta": {
+                                            "type": "object",
+                                            "properties": {
+                                                "timezone": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Profil non active ou droits insuffisants."
+                    },
+                    "419": {
+                        "description": "CSRF invalide ou absent."
+                    },
+                    "422": {
+                        "description": "Champs invalides.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -1565,7 +2358,8 @@
                 "required": [
                     "id",
                     "status",
-                    "message"
+                    "message",
+                    "registration_token"
                 ],
                 "properties": {
                     "id": {
@@ -1581,6 +2375,13 @@
                     },
                     "message": {
                         "type": "string"
+                    },
+                    "registration_token": {
+                        "type": "string",
+                        "minLength": 64,
+                        "maxLength": 64,
+                        "readOnly": true,
+                        "description": "Cle confidentielle retournee uniquement a la creation. Expire apres 7 jours et devient inutilisable apres rattachement. Ne pas publier ou journaliser."
                     }
                 }
             },
@@ -1622,7 +2423,9 @@
                     "id",
                     "name",
                     "email",
-                    "is_admin"
+                    "is_admin",
+                    "role",
+                    "is_active"
                 ],
                 "properties": {
                     "id": {
@@ -1637,6 +2440,18 @@
                     },
                     "is_admin": {
                         "type": "boolean"
+                    },
+                    "role": {
+                        "type": "string",
+                        "enum": [
+                            "admin",
+                            "client"
+                        ],
+                        "description": "Role derive des droits administrateur."
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "description": "Acces du compte ; les administrateurs sont toujours consideres actifs."
                     }
                 }
             },
@@ -1682,7 +2497,8 @@
                         "enum": [
                             "pending",
                             "confirmed",
-                            "rejected"
+                            "rejected",
+                            "cancelled"
                         ]
                     },
                     "created_at": {
@@ -1694,6 +2510,11 @@
                         "type": "string",
                         "format": "date-time",
                         "nullable": true
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "nullable": true,
+                        "description": "Client proprietaire ; null si non rattache."
                     }
                 }
             },
@@ -1705,7 +2526,8 @@
                     "confirmed",
                     "rejected",
                     "total_guests",
-                    "confirmed_guests"
+                    "confirmed_guests",
+                    "cancelled"
                 ],
                 "properties": {
                     "total_reservations": {
@@ -1733,6 +2555,10 @@
                         "type": "integer",
                         "minimum": 0,
                         "description": "Personnes des reservations confirmees ; ne mesure pas la presence effective."
+                    },
+                    "cancelled": {
+                        "type": "integer",
+                        "minimum": 0
                     }
                 }
             },

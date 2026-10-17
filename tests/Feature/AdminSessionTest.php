@@ -20,7 +20,7 @@ class AdminSessionTest extends TestCase
         $oldSession = session()->getId();
 
         $this->postJson('/api/admin/login', ['email' => $admin->email, 'password' => 'password', 'is_admin' => false])
-            ->assertOk()->assertExactJson(['data' => ['id' => $admin->id, 'name' => $admin->name, 'email' => $admin->email, 'is_admin' => true]]);
+            ->assertOk()->assertExactJson(['data' => ['id' => $admin->id, 'name' => $admin->name, 'email' => $admin->email, 'is_admin' => true, 'role' => 'admin', 'is_active' => true]]);
 
         $this->assertAuthenticatedAs($admin, 'web');
         $this->assertNotSame($oldSession, session()->getId());

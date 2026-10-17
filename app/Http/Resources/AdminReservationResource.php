@@ -7,11 +7,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class AdminReservationResource extends JsonResource
 {
-    /** @return array{id: int, name: string, email: string, phone: string, date: string, time: string, guests: int, status: string, created_at: ?string, updated_at: ?string} */
+    /** @return array{id: int, user_id: ?int, name: string, email: string, phone: string, date: string, time: string, guests: int, status: string, created_at: ?string, updated_at: ?string} */
     public function toArray(Request $request): array
     {
         return [
             'id' => $this->id,
+            'user_id' => $this->user_id === null ? null : (int) $this->user_id,
             'name' => $this->name,
             'email' => $this->email,
             'phone' => $this->phone,

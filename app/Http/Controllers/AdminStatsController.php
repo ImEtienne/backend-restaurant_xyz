@@ -64,10 +64,11 @@ class AdminStatsController extends Controller
             ->selectRaw('COUNT(CASE WHEN status = ? THEN 1 END) as pending', ['pending'])
             ->selectRaw('COUNT(CASE WHEN status = ? THEN 1 END) as confirmed', ['confirmed'])
             ->selectRaw('COUNT(CASE WHEN status = ? THEN 1 END) as rejected', ['rejected'])
+            ->selectRaw('COUNT(CASE WHEN status = ? THEN 1 END) as cancelled', ['cancelled'])
             ->selectRaw('COALESCE(SUM(CASE WHEN status = ? THEN guests ELSE 0 END), 0) as confirmed_guests', ['confirmed']);
     }
 
-    /** @return array{total_reservations: int, pending: int, confirmed: int, rejected: int, total_guests: int, confirmed_guests: int} */
+    /** @return array{total_reservations: int, pending: int, confirmed: int, rejected: int, cancelled: int, total_guests: int, confirmed_guests: int} */
     private function metrics(?stdClass $row): array
     {
         return [
@@ -75,6 +76,7 @@ class AdminStatsController extends Controller
             'pending' => (int) ($row->pending ?? 0),
             'confirmed' => (int) ($row->confirmed ?? 0),
             'rejected' => (int) ($row->rejected ?? 0),
+            'cancelled' => (int) ($row->cancelled ?? 0),
             'total_guests' => (int) ($row->total_guests ?? 0),
             'confirmed_guests' => (int) ($row->confirmed_guests ?? 0),
         ];
