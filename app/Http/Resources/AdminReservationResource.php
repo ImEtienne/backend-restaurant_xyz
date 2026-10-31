@@ -7,7 +7,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class AdminReservationResource extends JsonResource
 {
-    /** @return array{id: int, user_id: ?int, name: string, email: string, phone: string, date: string, time: string, guests: int, status: string, created_at: ?string, updated_at: ?string} */
+    /** @return array{id: int, user_id: ?int, name: string, email: string, phone: string, date: string, time: string, service_key: ?string, duration_minutes: ?int, guests: int, status: string, created_at: ?string, updated_at: ?string} */
     public function toArray(Request $request): array
     {
         return [
@@ -18,6 +18,8 @@ class AdminReservationResource extends JsonResource
             'phone' => $this->phone,
             'date' => $this->date,
             'time' => substr($this->time, 0, 5),
+            'service_key' => $this->service_key,
+            'duration_minutes' => $this->duration_minutes,
             'guests' => $this->guests,
             'status' => $this->status,
             'created_at' => $this->created_at?->toISOString(),

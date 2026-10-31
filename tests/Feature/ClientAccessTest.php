@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Reservation;
+use App\Models\RestaurantServiceSchedule;
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Auth;
@@ -12,6 +13,24 @@ use Tests\TestCase;
 class ClientAccessTest extends TestCase
 {
     use LazilyRefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        foreach (range(1, 7) as $dayOfWeek) {
+            RestaurantServiceSchedule::query()->create([
+                'service_key' => 'default',
+                'service_name' => 'Service',
+                'day_of_week' => $dayOfWeek,
+                'opens_at' => '00:00',
+                'closes_at' => '23:59',
+                'slot_interval_minutes' => 5,
+                'duration_minutes' => 60,
+                'capacity_guests' => 500,
+            ]);
+        }
+    }
 
     public function test_public_booking_can_create_an_inactive_client_without_verifying_email(): void
     {

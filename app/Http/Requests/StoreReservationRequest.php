@@ -21,6 +21,7 @@ class StoreReservationRequest extends FormRequest
             'phone' => ['bail', 'required', 'string', 'min:6', 'max:32'],
             'date' => ['bail', 'required', 'string', 'date_format:Y-m-d', 'after_or_equal:'.CarbonImmutable::now(config('reservations.timezone'))->toDateString()],
             'time' => ['bail', 'required', 'string', 'date_format:H:i'],
+            'service_key' => ['sometimes', 'nullable', 'string', 'regex:/\A[a-z0-9][a-z0-9_-]{0,63}\z/'],
             'guests' => ['bail', 'required', 'integer', 'between:1,10'],
         ];
     }

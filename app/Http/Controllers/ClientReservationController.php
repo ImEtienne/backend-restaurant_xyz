@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreClientReservationRequest;
 use App\Http\Requests\UpdateClientReservationRequest;
+use App\Http\ReservationAvailabilityService;
 use App\Http\Resources\AdminReservationResource;
 use App\Models\Reservation;
 use Carbon\CarbonImmutable;
@@ -24,23 +25,42 @@ class ClientReservationController extends Controller
         return new AdminReservationResource(Reservation::query()->where('user_id', $request->user()->id)->findOrFail($reservation));
     }
 
-    public function store(StoreClientReservationRequest $request): AdminReservationResource
+    public function store(StoreClientReservationRequest $request, ReservationAvailabilityService $availability): AdminReservationResource
     {
-        $reservation = new Reservation($request->safe()->only(['name', 'phone', 'date', 'time', 'guests']));
-        $reservation->email = $request->user()->email;
-        $reservation->user_id = $request->user()->id;
-        $reservation->status = 'pending';
-        $reservation->save();
+        $reservation = DB::transaction(function () use ($request, $availability): Reservation {
+            $reservation = new Reservation($request->safe()->only(['name', 'phone', 'date', 'time', 'guests']));
+            $reservation->email = $request->user()->email;
+            $reservation->user_id = $request->user()->id;
+            $reservation->status = 'pending';
+            $availability->assign(
+                $reservation,
+                $request->validated('date'),
+                $request->validated('time'),
+                (int) $request->validated('guests'),
+                $request->validated('service_key'),
+            );
+            $reservation->save();
+
+            return $reservation;
+        }, 3);
 
         return new AdminReservationResource($reservation);
     }
 
-    public function update(UpdateClientReservationRequest $request, int $reservation): AdminReservationResource
+    public function update(UpdateClientReservationRequest $request, int $reservation, ReservationAvailabilityService $availability): AdminReservationResource
     {
-        return new AdminReservationResource(DB::transaction(function () use ($request, $reservation): Reservation {
+        return new AdminReservationResource(DB::transaction(function () use ($request, $reservation, $availability): Reservation {
             $owned = Reservation::query()->where('user_id', $request->user()->id)->lockForUpdate()->findOrFail($reservation);
             $this->ensureEditable($owned);
             $owned->fill($request->safe()->only(['name', 'phone', 'date', 'time', 'guests']));
+            $availability->assign(
+                $owned,
+                $request->validated('date'),
+                $request->validated('time'),
+                (int) $request->validated('guests'),
+                $request->validated('service_key'),
+                $owned->id,
+            );
             $owned->save();
 
             return $owned;

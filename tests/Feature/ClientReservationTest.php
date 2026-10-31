@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Reservation;
+use App\Models\RestaurantServiceSchedule;
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -11,6 +12,24 @@ use Tests\TestCase;
 class ClientReservationTest extends TestCase
 {
     use LazilyRefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        foreach (range(1, 7) as $dayOfWeek) {
+            RestaurantServiceSchedule::query()->create([
+                'service_key' => 'default',
+                'service_name' => 'Service',
+                'day_of_week' => $dayOfWeek,
+                'opens_at' => '00:00',
+                'closes_at' => '23:59',
+                'slot_interval_minutes' => 5,
+                'duration_minutes' => 60,
+                'capacity_guests' => 500,
+            ]);
+        }
+    }
 
     public function test_client_sees_only_owned_reservations_even_when_email_matches_another_booking(): void
     {

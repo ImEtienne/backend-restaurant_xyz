@@ -3,10 +3,13 @@
 use App\Http\Controllers\AdminClientActivationController;
 use App\Http\Controllers\AdminReservationClientController;
 use App\Http\Controllers\AdminReservationController;
+use App\Http\Controllers\AdminRestaurantServiceExceptionController;
+use App\Http\Controllers\AdminRestaurantServiceScheduleController;
 use App\Http\Controllers\AdminSearchController;
 use App\Http\Controllers\AdminSessionController;
 use App\Http\Controllers\AdminStatsController;
 use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\ClientRegistrationController;
 use App\Http\Controllers\ClientReservationController;
 use App\Http\Controllers\ClientStatsController;
@@ -22,6 +25,10 @@ Route::post('/reservations', [ReservationController::class, 'store'])
     ->middleware(['throttle:reservations', 'cache.headers:no_store;private'])
     ->name('reservations.store');
 
+Route::get('/availability', AvailabilityController::class)
+    ->middleware(['throttle:60,1', 'cache.headers:no_store;private'])
+    ->name('availability.index');
+
 Route::prefix('admin')->name('admin.')->middleware('cache.headers:no_store;private')->group(function (): void {
     Route::post('/login', [AdminSessionController::class, 'store'])
         ->middleware('throttle:admin-login')->name('login');
@@ -32,6 +39,14 @@ Route::prefix('admin')->name('admin.')->middleware('cache.headers:no_store;priva
         Route::get('/search', AdminSearchController::class)->middleware(['can:manage-users', 'can:manage-reservations', 'throttle:60,1'])->name('search');
 
         Route::middleware('can:manage-reservations')->group(function (): void {
+            Route::get('/service-schedules', [AdminRestaurantServiceScheduleController::class, 'index'])->name('service-schedules.index');
+            Route::post('/service-schedules', [AdminRestaurantServiceScheduleController::class, 'store'])->name('service-schedules.store');
+            Route::put('/service-schedules/{schedule}', [AdminRestaurantServiceScheduleController::class, 'update'])->name('service-schedules.update');
+            Route::delete('/service-schedules/{schedule}', [AdminRestaurantServiceScheduleController::class, 'destroy'])->name('service-schedules.destroy');
+            Route::get('/service-exceptions', [AdminRestaurantServiceExceptionController::class, 'index'])->name('service-exceptions.index');
+            Route::post('/service-exceptions', [AdminRestaurantServiceExceptionController::class, 'store'])->name('service-exceptions.store');
+            Route::put('/service-exceptions/{exception}', [AdminRestaurantServiceExceptionController::class, 'update'])->name('service-exceptions.update');
+            Route::delete('/service-exceptions/{exception}', [AdminRestaurantServiceExceptionController::class, 'destroy'])->name('service-exceptions.destroy');
             Route::get('/stats', [AdminStatsController::class, 'summary'])->name('stats.summary');
             Route::get('/stats/daily', [AdminStatsController::class, 'daily'])->name('stats.daily');
             Route::get('/stats/hourly', [AdminStatsController::class, 'hourly'])->name('stats.hourly');

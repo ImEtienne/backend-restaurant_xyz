@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\RestaurantServiceSchedule;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
@@ -11,6 +12,24 @@ use Tests\TestCase;
 class ReservationTest extends TestCase
 {
     use LazilyRefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        foreach (range(1, 7) as $dayOfWeek) {
+            RestaurantServiceSchedule::query()->create([
+                'service_key' => 'default',
+                'service_name' => 'Service',
+                'day_of_week' => $dayOfWeek,
+                'opens_at' => '00:00',
+                'closes_at' => '23:59',
+                'slot_interval_minutes' => 5,
+                'duration_minutes' => 60,
+                'capacity_guests' => 500,
+            ]);
+        }
+    }
 
     public function test_creates_a_pending_request_and_returns_201_without_sending_notifications(): void
     {

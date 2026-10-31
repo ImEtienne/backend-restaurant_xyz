@@ -12,6 +12,7 @@ class UpdateClientReservationRequest extends StoreReservationRequest
         $this->mergeIfMissing([
             'name' => $reservation->name, 'phone' => $reservation->phone,
             'date' => $reservation->date, 'time' => substr($reservation->time, 0, 5), 'guests' => $reservation->guests,
+            'service_key' => $reservation->service_key,
         ]);
     }
 

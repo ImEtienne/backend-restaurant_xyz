@@ -2,8 +2,8 @@
     "openapi": "3.0.3",
     "info": {
         "title": "API de reservations",
-        "version": "1.3.0",
-        "description": "Enregistrement des demandes de reservation du restaurant. Une creation laisse la demande en attente : aucune table n'est confirmee et aucun email n'est envoye. Les essais enregistrent de vraies demandes dans la base du serveur selectionne. Administration par session Sanctum : frontend et API doivent partager le meme domaine principal (ou utiliser tous deux localhost en developpement). Configurer FRONTEND_URLS et SANCTUM_STATEFUL_DOMAINS avec les origines/hosts reels, ports inclus pour Sanctum. Avant le login, GET /sanctum/csrf-cookie avec credentials: include. Envoyer Accept: application/json, les cookies (credentials: include) et, pour POST/PATCH, le cookie XSRF-TOKEN decode dans X-XSRF-TOKEN. Axios : withCredentials=true et withXSRFToken=true. Le navigateur fournit Origin/Referer. Les reponses admin contiennent data ; les listes ajoutent links et meta. Aucune emission de token Bearer. Les utilisateurs ordinaires se connectent via POST /api/login et accedent a GET/PATCH /api/profile. Les administrateurs gerent les comptes via /api/admin/users. L inscription generale reste absente ; seule l inscription client liee a une cle de reservation est disponible. Espace client : apres reservation publique, conserver registration_token (cle confidentielle, valable 7 jours, usage unique), puis POST /api/client/register avec email et mot de passe. Aucune verification email. Le compte reste inactif jusqu a validation admin. POST /api/login renvoie 403 et ACCOUNT_PENDING_APPROVAL tant que le profil est inactif. Les toasts doivent afficher le champ message. Les reservations sont rattachees par user_id, jamais automatiquement par email. Une reservation en attente et a venir est modifiable/annulable ; confirmed, rejected, cancelled sont verrouilles. Le frontend affiche les statuts a partir des valeurs retournees."
+        "version": "1.4.0",
+        "description": "Enregistrement des demandes de reservation du restaurant. Une creation laisse la demande en attente : aucune table n'est confirmee et aucun email n'est envoye. Les demandes sont verifiees contre les services hebdomadaires, les exceptions de calendrier et la capacite disponible. Configurez au moins un service dans /api/admin/service-schedules avant d'accepter des reservations. Les essais enregistrent de vraies demandes dans la base du serveur selectionne. Administration par session Sanctum : frontend et API doivent partager le meme domaine principal (ou utiliser tous deux localhost en developpement). Configurer FRONTEND_URLS et SANCTUM_STATEFUL_DOMAINS avec les origines/hosts reels, ports inclus pour Sanctum. Avant le login, GET /sanctum/csrf-cookie avec credentials: include. Envoyer Accept: application/json, les cookies (credentials: include) et, pour POST/PATCH, le cookie XSRF-TOKEN decode dans X-XSRF-TOKEN. Axios : withCredentials=true et withXSRFToken=true. Le navigateur fournit Origin/Referer. Les reponses admin contiennent data ; les listes ajoutent links et meta. Aucune emission de token Bearer. Les utilisateurs ordinaires se connectent via POST /api/login et accedent a GET/PATCH /api/profile. Les administrateurs gerent les comptes via /api/admin/users. L inscription generale reste absente ; seule l inscription client liee a une cle de reservation est disponible. Espace client : apres reservation publique, conserver registration_token (cle confidentielle, valable 7 jours, usage unique), puis POST /api/client/register avec email et mot de passe. Aucune verification email. Le compte reste inactif jusqu a validation admin. POST /api/login renvoie 403 et ACCOUNT_PENDING_APPROVAL tant que le profil est inactif. Les toasts doivent afficher le champ message. Les reservations sont rattachees par user_id, jamais automatiquement par email. Une reservation en attente et a venir est modifiable/annulable ; confirmed, rejected, cancelled sont verrouilles. Le frontend affiche les statuts a partir des valeurs retournees."
     },
     "servers": [
         {
@@ -26,6 +26,360 @@
         }
     ],
     "paths": {
+        "/api/availability": {
+            "get": {
+                "tags": [
+                    "Reservations"
+                ],
+                "summary": "Consulter les creneaux ouverts et leur capacite restante",
+                "operationId": "getReservationAvailability",
+                "security": [],
+                "parameters": [
+                    {
+                        "name": "date",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "guests",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 10
+                        },
+                        "description": "Ne retourner que les creneaux qui peuvent accueillir ce nombre de convives."
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Creneaux disponibles apres horaires recurrents, exceptions et reservations deja enregistrees.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AvailabilityResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Date passee ou parametres invalides.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/service-schedules": {
+            "get": {
+                "tags": [
+                    "Administration"
+                ],
+                "summary": "Lister les services hebdomadaires",
+                "operationId": "listRestaurantServiceSchedules",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Services recurrents, avec jour ISO (lundi=1, dimanche=7).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/RestaurantServiceSchedule"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Droits administrateur requis."
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Administration"
+                ],
+                "summary": "Ajouter un service hebdomadaire",
+                "operationId": "createRestaurantServiceSchedule",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RestaurantServiceScheduleInput"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Service cree."
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Droits administrateur requis."
+                    },
+                    "422": {
+                        "description": "Configuration invalide ou doublon pour ce jour et ce service."
+                    }
+                }
+            }
+        },
+        "/api/admin/service-schedules/{schedule}": {
+            "parameters": [
+                {
+                    "name": "schedule",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                        "type": "integer"
+                    }
+                }
+            ],
+            "put": {
+                "tags": [
+                    "Administration"
+                ],
+                "summary": "Modifier les horaires ou la capacite d'un service",
+                "operationId": "updateRestaurantServiceSchedule",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RestaurantServiceScheduleUpdate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Service mis a jour."
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Droits administrateur requis."
+                    },
+                    "404": {
+                        "description": "Service inexistant."
+                    },
+                    "422": {
+                        "description": "Configuration invalide."
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Administration"
+                ],
+                "summary": "Supprimer un service hebdomadaire",
+                "operationId": "deleteRestaurantServiceSchedule",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Service supprime."
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Droits administrateur requis."
+                    },
+                    "404": {
+                        "description": "Service inexistant."
+                    },
+                    "409": {
+                        "description": "Des reservations futures utilisent encore ce service."
+                    }
+                }
+            }
+        },
+        "/api/admin/service-exceptions": {
+            "get": {
+                "tags": [
+                    "Administration"
+                ],
+                "summary": "Lister les exceptions de calendrier",
+                "operationId": "listRestaurantServiceExceptions",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Horaires speciaux et fermetures globales ou par service."
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Droits administrateur requis."
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Administration"
+                ],
+                "summary": "Ajouter une exception de calendrier",
+                "operationId": "createRestaurantServiceException",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RestaurantServiceExceptionInput"
+                            },
+                            "example": {
+                                "service_key": "*",
+                                "start_date": "2027-12-24",
+                                "end_date": "2027-12-26",
+                                "is_closed": true
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Exception creee."
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Droits administrateur requis."
+                    },
+                    "422": {
+                        "description": "Periode chevauchante ou configuration invalide."
+                    }
+                }
+            }
+        },
+        "/api/admin/service-exceptions/{exception}": {
+            "parameters": [
+                {
+                    "name": "exception",
+                    "in": "path",
+                    "required": true,
+                    "schema": {
+                        "type": "integer"
+                    }
+                }
+            ],
+            "put": {
+                "tags": [
+                    "Administration"
+                ],
+                "summary": "Modifier une exception de calendrier",
+                "operationId": "updateRestaurantServiceException",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RestaurantServiceExceptionUpdate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Exception mise a jour."
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Droits administrateur requis."
+                    },
+                    "404": {
+                        "description": "Exception inexistante."
+                    },
+                    "422": {
+                        "description": "Periode chevauchante ou configuration invalide."
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Administration"
+                ],
+                "summary": "Supprimer une exception de calendrier",
+                "operationId": "deleteRestaurantServiceException",
+                "security": [
+                    {
+                        "SessionCookie": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Exception supprimee."
+                    },
+                    "401": {
+                        "description": "Non connecte."
+                    },
+                    "403": {
+                        "description": "Droits administrateur requis."
+                    },
+                    "404": {
+                        "description": "Exception inexistante."
+                    }
+                }
+            }
+        },
         "/api/reservations": {
             "post": {
                 "tags": [
@@ -33,7 +387,7 @@
                 ],
                 "summary": "Envoyer une demande de reservation",
                 "operationId": "storeReservation",
-                "description": "La date et l'heure locales doivent etre dans le futur, dans le fuseau du restaurant (Europe/Paris par defaut). Les heures inexistantes lors du changement d'heure sont refusees. Limite : 5 tentatives par minute et par adresse IP, y compris les demandes invalides. Le statut est impose a pending par le serveur. Il n'y a pas encore de controle de disponibilite ni de deduplication des envois.",
+                "description": "La date et l'heure locales doivent etre dans le futur et correspondre a un creneau ouvert avec suffisamment de capacite. Les heures inexistantes lors du changement d'heure sont refusees. Si plusieurs services proposent la meme heure, service_key est obligatoire. Limite : 5 tentatives par minute et par adresse IP, y compris les demandes invalides. Le statut est impose a pending par le serveur.",
                 "security": [],
                 "requestBody": {
                     "required": true,
@@ -48,6 +402,7 @@
                                 "phone": "+33123456789",
                                 "date": "2027-10-15",
                                 "time": "19:30",
+                                "service_key": "dinner",
                                 "guests": 2
                             }
                         }
@@ -2308,6 +2663,284 @@
     },
     "components": {
         "schemas": {
+            "AvailabilityResponse": {
+                "type": "object",
+                "required": [
+                    "data",
+                    "meta"
+                ],
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AvailabilitySlot"
+                        }
+                    },
+                    "meta": {
+                        "type": "object",
+                        "required": [
+                            "date",
+                            "timezone"
+                        ],
+                        "properties": {
+                            "date": {
+                                "type": "string",
+                                "format": "date"
+                            },
+                            "timezone": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "AvailabilitySlot": {
+                "type": "object",
+                "required": [
+                    "service_key",
+                    "service_name",
+                    "time",
+                    "duration_minutes",
+                    "capacity_guests",
+                    "remaining_capacity"
+                ],
+                "properties": {
+                    "service_key": {
+                        "type": "string"
+                    },
+                    "service_name": {
+                        "type": "string"
+                    },
+                    "time": {
+                        "type": "string",
+                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+                    },
+                    "duration_minutes": {
+                        "type": "integer"
+                    },
+                    "capacity_guests": {
+                        "type": "integer"
+                    },
+                    "remaining_capacity": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "RestaurantServiceScheduleInput": {
+                "type": "object",
+                "required": [
+                    "service_key",
+                    "service_name",
+                    "day_of_week",
+                    "opens_at",
+                    "closes_at",
+                    "slot_interval_minutes",
+                    "duration_minutes",
+                    "capacity_guests"
+                ],
+                "properties": {
+                    "service_key": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+                    },
+                    "service_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "day_of_week": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 7,
+                        "description": "Jour ISO : lundi=1, dimanche=7."
+                    },
+                    "opens_at": {
+                        "type": "string",
+                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+                    },
+                    "closes_at": {
+                        "type": "string",
+                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+                    },
+                    "slot_interval_minutes": {
+                        "type": "integer",
+                        "minimum": 5,
+                        "maximum": 240
+                    },
+                    "duration_minutes": {
+                        "type": "integer",
+                        "minimum": 15,
+                        "maximum": 480,
+                        "description": "Duree d'occupation de la table."
+                    },
+                    "capacity_guests": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500,
+                        "description": "Nombre maximum de convives presents simultanement."
+                    }
+                }
+            },
+            "RestaurantServiceScheduleUpdate": {
+                "type": "object",
+                "required": [
+                    "service_name",
+                    "opens_at",
+                    "closes_at",
+                    "slot_interval_minutes",
+                    "duration_minutes",
+                    "capacity_guests"
+                ],
+                "properties": {
+                    "service_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "opens_at": {
+                        "type": "string",
+                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+                    },
+                    "closes_at": {
+                        "type": "string",
+                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+                    },
+                    "slot_interval_minutes": {
+                        "type": "integer",
+                        "minimum": 5,
+                        "maximum": 240
+                    },
+                    "duration_minutes": {
+                        "type": "integer",
+                        "minimum": 15,
+                        "maximum": 480
+                    },
+                    "capacity_guests": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500
+                    }
+                }
+            },
+            "RestaurantServiceSchedule": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/RestaurantServiceScheduleInput"
+                    },
+                    {
+                        "type": "object",
+                        "required": [
+                            "id"
+                        ],
+                        "properties": {
+                            "id": {
+                                "type": "integer"
+                            }
+                        }
+                    }
+                ]
+            },
+            "RestaurantServiceExceptionInput": {
+                "type": "object",
+                "required": [
+                    "service_key",
+                    "start_date",
+                    "end_date",
+                    "is_closed"
+                ],
+                "description": "Pour une fermeture globale, service_key vaut *. Pour des horaires exceptionnels, fournir aussi service_name, opens_at, closes_at, slot_interval_minutes, duration_minutes et capacity_guests.",
+                "properties": {
+                    "service_key": {
+                        "type": "string",
+                        "description": "Cle de service existante ou nouvelle ; * ferme tout le restaurant."
+                    },
+                    "service_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "is_closed": {
+                        "type": "boolean"
+                    },
+                    "opens_at": {
+                        "type": "string",
+                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+                    },
+                    "closes_at": {
+                        "type": "string",
+                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+                    },
+                    "slot_interval_minutes": {
+                        "type": "integer",
+                        "minimum": 5,
+                        "maximum": 240
+                    },
+                    "duration_minutes": {
+                        "type": "integer",
+                        "minimum": 15,
+                        "maximum": 480
+                    },
+                    "capacity_guests": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500
+                    }
+                }
+            },
+            "RestaurantServiceExceptionUpdate": {
+                "type": "object",
+                "required": [
+                    "start_date",
+                    "end_date",
+                    "is_closed"
+                ],
+                "description": "Meme regles que la creation, sans service_key qui reste immuable. Les horaires sont requis si is_closed est false.",
+                "properties": {
+                    "service_name": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "is_closed": {
+                        "type": "boolean"
+                    },
+                    "opens_at": {
+                        "type": "string",
+                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+                    },
+                    "closes_at": {
+                        "type": "string",
+                        "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+                    },
+                    "slot_interval_minutes": {
+                        "type": "integer",
+                        "minimum": 5,
+                        "maximum": 240
+                    },
+                    "duration_minutes": {
+                        "type": "integer",
+                        "minimum": 15,
+                        "maximum": 480
+                    },
+                    "capacity_guests": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500
+                    }
+                        }
+            },
             "ReservationRequest": {
                 "type": "object",
                 "required": [
@@ -2345,6 +2978,11 @@
                         "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
                         "example": "19:30",
                         "description": "Heure locale HH:mm, sans secondes. La combinaison date/heure doit etre future."
+                    },
+                    "service_key": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+                        "description": "Facultatif sauf si plusieurs services proposent la meme heure."
                     },
                     "guests": {
                         "type": "integer",
@@ -2464,6 +3102,8 @@
                     "phone",
                     "date",
                     "time",
+                    "service_key",
+                    "duration_minutes",
                     "guests",
                     "status"
                 ],
@@ -2488,6 +3128,15 @@
                     "time": {
                         "type": "string",
                         "example": "19:30"
+                    },
+                    "service_key": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "duration_minutes": {
+                        "type": "integer",
+                        "nullable": true,
+                        "description": "Duree d'occupation en minutes, capturee lors de la reservation."
                     },
                     "guests": {
                         "type": "integer"

@@ -26,6 +26,8 @@ class SwaggerTest extends TestCase
             ->assertJsonPath('openapi', '3.0.3')
             ->assertJsonPath('servers.0.url', '/')
             ->assertJsonPath('paths./api/reservations.post.operationId', 'storeReservation')
+            ->assertJsonPath('paths./api/availability.get.operationId', 'getReservationAvailability')
+            ->assertJsonPath('paths./api/admin/service-schedules.post.operationId', 'createRestaurantServiceSchedule')
             ->assertJsonPath('components.schemas.ReservationRequest.required', [
                 'name',
                 'email',
@@ -35,6 +37,7 @@ class SwaggerTest extends TestCase
                 'guests',
             ])
             ->assertJsonPath('components.schemas.ReservationRequest.properties.guests.maximum', 10)
+            ->assertJsonPath('components.schemas.ReservationRequest.properties.service_key.type', 'string')
             ->assertJsonPath('components.schemas.ReservationCreated.properties.status.enum', ['pending'])
             ->assertJsonStructure([
                 'paths' => [

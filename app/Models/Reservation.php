@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 #[Hidden(['registration_token_hash'])]
-#[Fillable(['name', 'email', 'phone', 'date', 'time', 'guests'])]
+#[Fillable(['name', 'email', 'phone', 'date', 'time', 'guests', 'service_key', 'duration_minutes'])]
 class Reservation extends Model
 {
     /** @use HasFactory<ReservationFactory> */
@@ -19,6 +19,7 @@ class Reservation extends Model
     {
         return [
             'guests' => 'integer',
+            'duration_minutes' => 'integer',
         ];
     }
 }
