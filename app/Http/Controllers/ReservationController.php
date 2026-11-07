@@ -6,6 +6,7 @@ use App\Http\Requests\StoreReservationRequest;
 use App\Http\ReservationAvailabilityService;
 use App\Http\Resources\ReservationResource;
 use App\Models\Reservation;
+use App\Notifications\ReservationActivity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -27,6 +28,7 @@ class ReservationController extends Controller
                 $request->validated('service_key'),
             );
             $reservation->save();
+            ReservationActivity::notifyAdmins($reservation, 'created');
 
             return $reservation;
         }, 3);

@@ -26,6 +26,66 @@
         }
     ],
     "paths": {
+        "/api/admin/notifications": {
+            "get": {
+                "tags": ["Administration"],
+                "summary": "Lister les notifications de l administrateur connecte",
+                "description": "Notifications creees pour les administrateurs existants lors de la creation, modification ou annulation d une reservation par un client. Pas de reprise des evenements passes. Le compteur concerne toutes les pages. Le champ message contient du texte brut et doit etre affiche sans interpretation HTML.",
+                "operationId": "listAdminNotifications",
+                "security": [{"SessionCookie": []}],
+                "parameters": [
+                    {"name": "page", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1}}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Notifications triees par date de creation decroissante, 20 par page.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {"type": "array", "items": {"$ref": "#/components/schemas/AdminNotification"}},
+                                        "links": {"type": "object"},
+                                        "meta": {"type": "object", "properties": {"unread_count": {"type": "integer"}, "total": {"type": "integer"}, "current_page": {"type": "integer"}}}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {"description": "Non connecte."},
+                    "403": {"description": "Droits administrateur requis."}
+                }
+            }
+        },
+        "/api/admin/notifications/read-all": {
+            "patch": {
+                "tags": ["Administration"],
+                "summary": "Marquer toutes ses notifications comme lues",
+                "operationId": "readAllAdminNotifications",
+                "security": [{"SessionCookie": []}],
+                "responses": {
+                    "200": {"description": "Notifications marquees comme lues.", "content": {"application/json": {"schema": {"type": "object", "properties": {"unread_count": {"type": "integer", "example": 0}}}}}},
+                    "401": {"description": "Non connecte."},
+                    "403": {"description": "Droits administrateur requis."}
+                }
+            }
+        },
+        "/api/admin/notifications/{notification}/read": {
+            "patch": {
+                "tags": ["Administration"],
+                "summary": "Marquer une de ses notifications comme lue",
+                "description": "Operation idempotente : une notification deja lue conserve sa date de lecture.",
+                "operationId": "readAdminNotification",
+                "security": [{"SessionCookie": []}],
+                "parameters": [{"name": "notification", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+                "responses": {
+                    "200": {"description": "Notification marquee comme lue.", "content": {"application/json": {"schema": {"type": "object", "properties": {"data": {"$ref": "#/components/schemas/AdminNotification"}}}}}},
+                    "401": {"description": "Non connecte."},
+                    "403": {"description": "Droits administrateur requis."},
+                    "404": {"description": "Notification inexistante ou appartenant a un autre administrateur."}
+                }
+            }
+        },
         "/api/availability": {
             "get": {
                 "tags": [
@@ -2663,6 +2723,22 @@
     },
     "components": {
         "schemas": {
+            "AdminNotification": {
+                "type": "object",
+                "required": ["id", "type", "message", "reservation_id", "name", "date", "time", "guests", "created_at", "read_at"],
+                "properties": {
+                    "id": {"type": "string", "format": "uuid"},
+                    "type": {"type": "string", "enum": ["reservation_created", "reservation_updated", "reservation_cancelled"]},
+                    "message": {"type": "string"},
+                    "reservation_id": {"type": "integer"},
+                    "name": {"type": "string"},
+                    "date": {"type": "string", "format": "date"},
+                    "time": {"type": "string", "example": "19:30"},
+                    "guests": {"type": "integer"},
+                    "created_at": {"type": "string", "format": "date-time", "nullable": true},
+                    "read_at": {"type": "string", "format": "date-time", "nullable": true}
+                }
+            },
             "AvailabilityResponse": {
                 "type": "object",
                 "required": [
