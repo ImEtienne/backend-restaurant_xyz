@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateClientReservationRequest;
 use App\Http\ReservationAvailabilityService;
 use App\Http\Resources\AdminReservationResource;
 use App\Models\Reservation;
+use App\Notifications\ReservationActivity;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -40,6 +41,7 @@ class ClientReservationController extends Controller
                 $request->validated('service_key'),
             );
             $reservation->save();
+            ReservationActivity::notifyAdmins($reservation, 'created');
 
             return $reservation;
         }, 3);
@@ -61,7 +63,11 @@ class ClientReservationController extends Controller
                 $request->validated('service_key'),
                 $owned->id,
             );
+            $changed = $owned->isDirty();
             $owned->save();
+            if ($changed) {
+                ReservationActivity::notifyAdmins($owned, 'updated');
+            }
 
             return $owned;
         }, 3));
@@ -74,6 +80,7 @@ class ClientReservationController extends Controller
             $this->ensureEditable($owned);
             $owned->status = 'cancelled';
             $owned->save();
+            ReservationActivity::notifyAdmins($owned, 'cancelled');
 
             return $owned;
         }, 3));

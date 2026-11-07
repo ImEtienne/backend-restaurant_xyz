@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminClientActivationController;
+use App\Http\Controllers\AdminNotificationController;
 use App\Http\Controllers\AdminReservationClientController;
 use App\Http\Controllers\AdminReservationController;
 use App\Http\Controllers\AdminRestaurantServiceExceptionController;
@@ -39,6 +40,9 @@ Route::prefix('admin')->name('admin.')->middleware('cache.headers:no_store;priva
         Route::get('/search', AdminSearchController::class)->middleware(['can:manage-users', 'can:manage-reservations', 'throttle:60,1'])->name('search');
 
         Route::middleware('can:manage-reservations')->group(function (): void {
+            Route::get('/notifications', [AdminNotificationController::class, 'index'])->name('notifications.index');
+            Route::patch('/notifications/read-all', [AdminNotificationController::class, 'markAllRead'])->name('notifications.read-all');
+            Route::patch('/notifications/{notification}/read', [AdminNotificationController::class, 'update'])->name('notifications.read');
             Route::get('/service-schedules', [AdminRestaurantServiceScheduleController::class, 'index'])->name('service-schedules.index');
             Route::post('/service-schedules', [AdminRestaurantServiceScheduleController::class, 'store'])->name('service-schedules.store');
             Route::put('/service-schedules/{schedule}', [AdminRestaurantServiceScheduleController::class, 'update'])->name('service-schedules.update');
