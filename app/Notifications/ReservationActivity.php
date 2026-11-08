@@ -3,7 +3,6 @@
 namespace App\Notifications;
 
 use App\Models\Reservation;
-use App\Models\User;
 use Illuminate\Notifications\Notification;
 
 class ReservationActivity extends Notification
@@ -18,9 +17,7 @@ class ReservationActivity extends Notification
 
     public static function notifyAdmins(Reservation $reservation, string $activity): void
     {
-        foreach (User::query()->where('is_admin', true)->lazyById() as $admin) {
-            $admin->notify(new self($reservation, $activity));
-        }
+        AdminNotificationDispatcher::send(new self($reservation, $activity));
     }
 
     /** @return array{type: string, message: string, reservation_id: int, name: string, date: string, time: string, guests: int} */

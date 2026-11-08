@@ -31,7 +31,8 @@ class SwaggerTest extends TestCase
             ->assertJsonPath('paths./api/admin/notifications.get.operationId', 'listAdminNotifications')
             ->assertJsonPath('paths./api/admin/notifications/read-all.patch.operationId', 'readAllAdminNotifications')
             ->assertJsonPath('paths./api/admin/notifications/{notification}/read.patch.operationId', 'readAdminNotification')
-            ->assertJsonPath('components.schemas.AdminNotification.properties.type.enum', ['reservation_created', 'reservation_updated', 'reservation_cancelled'])
+            ->assertJsonPath('components.schemas.AdminNotification.properties.type.enum', ['reservation_created', 'reservation_updated', 'reservation_cancelled', 'client_registered'])
+            ->assertJsonPath('components.schemas.AdminNotification.oneOf.1.required', ['user_id'])
             ->assertJsonPath('components.schemas.ReservationRequest.required', [
                 'name',
                 'email',

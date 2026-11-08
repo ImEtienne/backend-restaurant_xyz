@@ -16,6 +16,91 @@ class AdminNotificationTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
+    public function test_client_registration_notifies_each_admin_of_the_pending_account(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $otherAdmin = User::factory()->admin()->create();
+        $token = str_repeat('a', 64);
+        $reservation = Reservation::factory()->create([
+            'name' => 'Marie Dupont',
+            'email' => 'marie@example.com',
+            'registration_token_hash' => hash('sha256', $token),
+        ]);
+
+        $this->postJson('/api/client/register', [
+            'email' => 'marie@example.com',
+            'password' => 'Client-password-123',
+            'password_confirmation' => 'Client-password-123',
+            'registration_token' => $token,
+        ])->assertCreated()->assertJsonPath('code', 'ACCOUNT_PENDING_APPROVAL');
+
+        $client = User::query()->where('email', 'marie@example.com')->firstOrFail();
+        $this->assertFalse($client->is_active);
+        $this->assertDatabaseHas('reservations', ['id' => $reservation->id, 'user_id' => $client->id, 'registration_token_hash' => null]);
+        $this->assertDatabaseCount('notifications', 2);
+        $response = $this->actingAs($admin)->getJson('/api/admin/notifications');
+        $response->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.unread_count', 1)
+            ->assertJsonPath('data.0.type', 'client_registered')
+            ->assertJsonPath('data.0.user_id', $client->id)
+            ->assertJsonPath('data.0.name', 'Marie Dupont')
+            ->assertJsonPath('data.0.message', 'Compte client en attente de validation : Marie Dupont')
+            ->assertJsonPath('data.0.read_at', null);
+        $this->assertSame(1, $otherAdmin->unreadNotifications()->count());
+        $this->assertSame(0, $client->notifications()->count());
+        $this->patchJson('/api/admin/notifications/'.$response->json('data.0.id').'/read')->assertOk();
+        $this->assertSame(0, $admin->unreadNotifications()->count());
+        $this->assertSame(1, $otherAdmin->unreadNotifications()->count());
+    }
+
+    public function test_invalid_client_registration_creates_no_notification(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = str_repeat('a', 64);
+        Reservation::factory()->create([
+            'email' => 'owner@example.com',
+            'registration_token_hash' => hash('sha256', $token),
+        ]);
+
+        $this->postJson('/api/client/register', [
+            'email' => 'another@example.com',
+            'password' => 'Client-password-123',
+            'password_confirmation' => 'Client-password-123',
+            'registration_token' => $token,
+        ])->assertUnprocessable()->assertJsonValidationErrors('registration_token');
+
+        $this->assertSame(0, $admin->notifications()->count());
+        $this->assertDatabaseMissing('users', ['email' => 'another@example.com']);
+    }
+
+    public function test_registration_notification_failure_rolls_back_the_account_and_all_notifications(): void
+    {
+        User::factory()->admin()->create();
+        User::factory()->admin()->create();
+        $token = str_repeat('a', 64);
+        $hash = hash('sha256', $token);
+        $reservation = Reservation::factory()->create(['email' => 'marie@example.com', 'registration_token_hash' => $hash]);
+        $attempts = 0;
+        Event::listen(NotificationSending::class, function () use (&$attempts): void {
+            $attempts++;
+            if ($attempts === 2) {
+                throw new RuntimeException('Notification storage failed.');
+            }
+        });
+
+        $this->postJson('/api/client/register', [
+            'email' => 'marie@example.com',
+            'password' => 'Client-password-123',
+            'password_confirmation' => 'Client-password-123',
+            'registration_token' => $token,
+        ])->assertInternalServerError();
+
+        $this->assertSame(2, $attempts);
+        $this->assertDatabaseMissing('users', ['email' => 'marie@example.com']);
+        $this->assertDatabaseHas('reservations', ['id' => $reservation->id, 'user_id' => null, 'registration_token_hash' => $hash]);
+        $this->assertDatabaseCount('notifications', 0);
+    }
+
     public function test_public_reservation_notifies_each_existing_admin(): void
     {
         $this->freezeTime();
