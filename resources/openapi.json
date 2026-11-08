@@ -30,7 +30,7 @@
             "get": {
                 "tags": ["Administration"],
                 "summary": "Lister les notifications de l administrateur connecte",
-                "description": "Notifications creees pour les administrateurs existants lors de la creation, modification ou annulation d une reservation par un client. Pas de reprise des evenements passes. Le compteur concerne toutes les pages. Le champ message contient du texte brut et doit etre affiche sans interpretation HTML.",
+                "description": "Notifications creees pour les administrateurs existants lors de la creation, modification ou annulation d une reservation par un client, ou lors de l inscription d un client en attente de validation. Pas de reprise des evenements passes. Le compteur concerne toutes les pages. Le champ message contient du texte brut et doit etre affiche sans interpretation HTML. Pour client_registered, user_id identifie le client a valider via PATCH /api/admin/users/{user}/activation.",
                 "operationId": "listAdminNotifications",
                 "security": [{"SessionCookie": []}],
                 "parameters": [
@@ -2725,12 +2725,23 @@
         "schemas": {
             "AdminNotification": {
                 "type": "object",
-                "required": ["id", "type", "message", "reservation_id", "name", "date", "time", "guests", "created_at", "read_at"],
+                "required": ["id", "type", "message", "name", "created_at", "read_at"],
+                "oneOf": [
+                    {
+                        "required": ["reservation_id", "date", "time", "guests"],
+                        "properties": {"type": {"type": "string", "enum": ["reservation_created", "reservation_updated", "reservation_cancelled"]}}
+                    },
+                    {
+                        "required": ["user_id"],
+                        "properties": {"type": {"type": "string", "enum": ["client_registered"]}}
+                    }
+                ],
                 "properties": {
                     "id": {"type": "string", "format": "uuid"},
-                    "type": {"type": "string", "enum": ["reservation_created", "reservation_updated", "reservation_cancelled"]},
+                    "type": {"type": "string", "enum": ["reservation_created", "reservation_updated", "reservation_cancelled", "client_registered"]},
                     "message": {"type": "string"},
                     "reservation_id": {"type": "integer"},
+                    "user_id": {"type": "integer", "description": "Identifiant du client en attente de validation pour client_registered."},
                     "name": {"type": "string"},
                     "date": {"type": "string", "format": "date"},
                     "time": {"type": "string", "example": "19:30"},

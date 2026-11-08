@@ -7,6 +7,18 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Donnees de demonstration
+
+Pour remplir une base **locale de test**, avec au moins un administrateur existant :
+
+```shell
+php artisan db:seed --class=DemoDataSeeder --no-interaction
+```
+
+Le seeder ajoute 150 clients, 450 reservations, 450 notifications reparties entre les administrateurs existants, 450 horaires recurrents et 450 exceptions historiques. Les donnees existantes ne sont pas supprimees. Les clients utilisent des adresses `demo-client-...@example.test` et un mot de passe aleatoire non conserve : ils ne sont pas destines a la connexion. Les services de test utilisent le prefixe `demo-service-`.
+
+Les horaires de test affectent les disponibilites et peuvent imposer la selection d'un service pour reserver ; n'utilisez ce jeu que sur une base dediee aux essais. Le seeder refuse les environnements autres que `local` et `testing` et s'arrete si des donnees de demonstration existent deja. Il ne fait pas partie du seeder par defaut.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

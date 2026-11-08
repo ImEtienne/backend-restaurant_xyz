@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\RegisterClientRequest;
 use App\Models\Reservation;
 use App\Models\User;
+use App\Notifications\AdminNotificationDispatcher;
+use App\Notifications\ClientRegistrationPending;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -26,6 +28,7 @@ class ClientRegistrationController extends Controller
             $reservation->user_id = $user->id;
             $reservation->registration_token_hash = null;
             $reservation->save();
+            AdminNotificationDispatcher::send(new ClientRegistrationPending($user));
         }, 3);
 
         return response()->json([
